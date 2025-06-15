@@ -1,0 +1,589 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Motion Model Comparison</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/plotly.js/2.18.2/plotly.min.js"></script>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: #333;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            backdrop-filter: blur(10px);
+        }
+        
+        h1 {
+            text-align: center;
+            color: #2c3e50;
+            margin-bottom: 10px;
+            font-size: 2.5em;
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        
+        .subtitle {
+            text-align: center;
+            color: #7f8c8d;
+            margin-bottom: 40px;
+            font-size: 1.2em;
+        }
+        
+        .model-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+            gap: 30px;
+            margin-bottom: 40px;
+        }
+        
+        .model-card {
+            background: white;
+            border-radius: 15px;
+            padding: 25px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            border: 2px solid transparent;
+            transition: all 0.3s ease;
+        }
+        
+        .model-card:hover {
+            transform: translateY(-5px);
+            border-color: #667eea;
+            box-shadow: 0 15px 40px rgba(0,0,0,0.15);
+        }
+        
+        .model-card h3 {
+            color: #2c3e50;
+            margin-bottom: 15px;
+            font-size: 1.4em;
+        }
+        
+        .controls {
+            background: #f8f9fa;
+            border-radius: 15px;
+            padding: 25px;
+            margin-bottom: 30px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 5px;
+        }
+        
+        .control-group label {
+            font-weight: 600;
+            color: #2c3e50;
+            font-size: 0.9em;
+        }
+        
+        input[type="range"] {
+            width: 120px;
+            height: 6px;
+            border-radius: 3px;
+            background: #ddd;
+            outline: none;
+            -webkit-appearance: none;
+        }
+        
+        input[type="range"]::-webkit-slider-thumb {
+            appearance: none;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: #667eea;
+            cursor: pointer;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+        }
+        
+        button {
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 25px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            font-size: 1em;
+        }
+        
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
+        }
+        
+        .plot-container {
+            background: white;
+            border-radius: 15px;
+            padding: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            margin-bottom: 30px;
+        }
+        
+        .comparison-table {
+            background: white;
+            border-radius: 15px;
+            padding: 25px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            overflow-x: auto;
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+        }
+        
+        th, td {
+            text-align: left;
+            padding: 12px 15px;
+            border-bottom: 1px solid #eee;
+        }
+        
+        th {
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            color: white;
+            font-weight: 600;
+        }
+        
+        tr:hover {
+            background: #f8f9fa;
+        }
+        
+        .accuracy-indicator {
+            display: inline-block;
+            width: 100px;
+            height: 8px;
+            background: #eee;
+            border-radius: 4px;
+            overflow: hidden;
+        }
+        
+        .accuracy-bar {
+            height: 100%;
+            border-radius: 4px;
+            transition: width 0.3s ease;
+        }
+        
+        .high { background: #27ae60; }
+        .medium { background: #f39c12; }
+        .low { background: #e74c3c; }
+        
+        @media (max-width: 768px) {
+            .container { padding: 15px; }
+            .model-grid { grid-template-columns: 1fr; }
+            .controls { flex-direction: column; }
+            h1 { font-size: 2em; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Motion Model Comparison</h1>
+        <p class="subtitle">SE(3) State Estimation: Constant Velocity vs Integrated Approaches</p>
+        
+        <div class="model-grid">
+            <div class="model-card">
+                <h3>🎯 Your Constant Velocity Model</h3>
+                <p><strong>Prediction:</strong> x(t+Δt) = x(t) + v·Δt</p>
+                <p><strong>State Transition:</strong> Φ(Δt) with identity + time block</p>
+                <p><strong>Advantages:</strong> Simple, computationally efficient, good for short-term prediction</p>
+                <p><strong>Limitations:</strong> No acceleration modeling, degrades with longer prediction horizons</p>
+            </div>
+            
+            <div class="model-card">
+                <h3>🚀 Constant Acceleration Model</h3>
+                <p><strong>Prediction:</strong> x(t+Δt) = x(t) + v·Δt + ½a·Δt²</p>
+                <p><strong>State Transition:</strong> Extended Φ with acceleration terms</p>
+                <p><strong>Advantages:</strong> Models acceleration, better for maneuvering targets</p>
+                <p><strong>Limitations:</strong> Higher computational cost, more parameters to tune</p>
+            </div>
+            
+            <div class="model-card">
+                <h3>🔄 Integrated Hybrid Model</h3>
+                <p><strong>Prediction:</strong> Adaptive switching between CV and CA</p>
+                <p><strong>State Transition:</strong> Model probability-weighted combination</p>
+                <p><strong>Advantages:</strong> Robust to different motion patterns, adaptive</p>
+                <p><strong>Limitations:</strong> Complex implementation, requires model selection logic</p>
+            </div>
+        </div>
+        
+        <div class="controls">
+            <div class="control-group">
+                <label>Initial Velocity (m/s)</label>
+                <input type="range" id="velocity" min="1" max="20" value="10" step="1">
+                <span id="velocityValue">10</span>
+            </div>
+            
+            <div class="control-group">
+                <label>Acceleration (m/s²)</label>
+                <input type="range" id="acceleration" min="-5" max="5" value="0" step="0.5">
+                <span id="accelerationValue">0</span>
+            </div>
+            
+            <div class="control-group">
+                <label>Prediction Time (s)</label>
+                <input type="range" id="predTime" min="1" max="10" value="5" step="1">
+                <span id="predTimeValue">5</span>
+            </div>
+            
+            <div class="control-group">
+                <label>Noise Level</label>
+                <input type="range" id="noise" min="0" max="2" value="0.5" step="0.1">
+                <span id="noiseValue">0.5</span>
+            </div>
+            
+            <button onclick="updateSimulation()">Update Simulation</button>
+            <button onclick="resetSimulation()">Reset</button>
+        </div>
+        
+        <div class="plot-container">
+            <div id="trajectoryPlot" style="width:100%;height:500px;"></div>
+        </div>
+        
+        <div class="plot-container">
+            <div id="errorPlot" style="width:100%;height:400px;"></div>
+        </div>
+        
+        <div class="comparison-table">
+            <h3>Performance Comparison</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Model</th>
+                        <th>Short-term Accuracy</th>
+                        <th>Long-term Accuracy</th>
+                        <th>Computational Cost</th>
+                        <th>Memory Usage</th>
+                        <th>Best Use Case</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>Constant Velocity</strong></td>
+                        <td><div class="accuracy-indicator"><div class="accuracy-bar high" style="width: 85%"></div></div></td>
+                        <td><div class="accuracy-indicator"><div class="accuracy-bar medium" style="width: 60%"></div></div></td>
+                        <td><div class="accuracy-indicator"><div class="accuracy-bar high" style="width: 90%"></div></div></td>
+                        <td><div class="accuracy-indicator"><div class="accuracy-bar high" style="width: 95%"></div></div></td>
+                        <td>Smooth, predictable motion</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Constant Acceleration</strong></td>
+                        <td><div class="accuracy-indicator"><div class="accuracy-bar high" style="width: 80%"></div></div></td>
+                        <td><div class="accuracy-indicator"><div class="accuracy-bar high" style="width: 85%"></div></div></td>
+                        <td><div class="accuracy-indicator"><div class="accuracy-bar medium" style="width: 70%"></div></div></td>
+                        <td><div class="accuracy-indicator"><div class="accuracy-bar medium" style="width: 75%"></div></div></td>
+                        <td>Maneuvering, accelerating targets</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Integrated Hybrid</strong></td>
+                        <td><div class="accuracy-indicator"><div class="accuracy-bar high" style="width: 90%"></div></div></td>
+                        <td><div class="accuracy-indicator"><div class="accuracy-bar high" style="width: 90%"></div></div></td>
+                        <td><div class="accuracy-indicator"><div class="accuracy-bar low" style="width: 45%"></div></div></td>
+                        <td><div class="accuracy-indicator"><div class="accuracy-bar medium" style="width: 60%"></div></div></td>
+                        <td>Unknown or varying motion patterns</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        // Initialize simulation parameters
+        let simParams = {
+            velocity: 10,
+            acceleration: 0,
+            predTime: 5,
+            noise: 0.5
+        };
+
+        // Update parameter displays
+        function updateParamDisplays() {
+            document.getElementById('velocityValue').textContent = simParams.velocity;
+            document.getElementById('accelerationValue').textContent = simParams.acceleration;
+            document.getElementById('predTimeValue').textContent = simParams.predTime;
+            document.getElementById('noiseValue').textContent = simParams.noise;
+        }
+
+        // Event listeners for controls
+        document.getElementById('velocity').addEventListener('input', (e) => {
+            simParams.velocity = parseFloat(e.target.value);
+            updateParamDisplays();
+        });
+
+        document.getElementById('acceleration').addEventListener('input', (e) => {
+            simParams.acceleration = parseFloat(e.target.value);
+            updateParamDisplays();
+        });
+
+        document.getElementById('predTime').addEventListener('input', (e) => {
+            simParams.predTime = parseFloat(e.target.value);
+            updateParamDisplays();
+        });
+
+        document.getElementById('noise').addEventListener('input', (e) => {
+            simParams.noise = parseFloat(e.target.value);
+            updateParamDisplays();
+        });
+
+        // Generate ground truth trajectory
+        function generateGroundTruth(dt = 0.1) {
+            const time = [];
+            const position = [];
+            const velocity = [];
+            
+            let t = 0;
+            let x = 0;
+            let v = simParams.velocity;
+            
+            while (t <= simParams.predTime) {
+                // Add some realistic noise and non-linear effects
+                const noisePos = (Math.random() - 0.5) * simParams.noise * 0.5;
+                const noiseVel = (Math.random() - 0.5) * simParams.noise * 0.1;
+                
+                time.push(t);
+                position.push(x + noisePos);
+                velocity.push(v + noiseVel);
+                
+                // Update with acceleration and some non-linear effects
+                const dynamicAccel = simParams.acceleration + 0.5 * Math.sin(t * 0.5) * simParams.acceleration;
+                v += dynamicAccel * dt;
+                x += v * dt;
+                t += dt;
+            }
+            
+            return { time, position, velocity };
+        }
+
+        // Constant velocity prediction
+        function predictConstantVelocity(groundTruth) {
+            const predictions = [];
+            const errors = [];
+            
+            for (let i = 0; i < groundTruth.time.length; i++) {
+                const t = groundTruth.time[i];
+                const predicted = simParams.velocity * t;
+                const error = Math.abs(predicted - groundTruth.position[i]);
+                
+                predictions.push(predicted);
+                errors.push(error);
+            }
+            
+            return { predictions, errors };
+        }
+
+        // Constant acceleration prediction
+        function predictConstantAcceleration(groundTruth) {
+            const predictions = [];
+            const errors = [];
+            
+            for (let i = 0; i < groundTruth.time.length; i++) {
+                const t = groundTruth.time[i];
+                const predicted = simParams.velocity * t + 0.5 * simParams.acceleration * t * t;
+                const error = Math.abs(predicted - groundTruth.position[i]);
+                
+                predictions.push(predicted);
+                errors.push(error);
+            }
+            
+            return { predictions, errors };
+        }
+
+        // Integrated hybrid model (simplified)
+        function predictHybrid(groundTruth) {
+            const predictions = [];
+            const errors = [];
+            const cvWeight = 0.7; // Weight for constant velocity
+            const caWeight = 0.3; // Weight for constant acceleration
+            
+            for (let i = 0; i < groundTruth.time.length; i++) {
+                const t = groundTruth.time[i];
+                const cvPred = simParams.velocity * t;
+                const caPred = simParams.velocity * t + 0.5 * simParams.acceleration * t * t;
+                
+                // Adaptive weighting based on recent performance
+                const adaptiveWeight = Math.exp(-t * 0.2); // Decay over time
+                const finalCvWeight = cvWeight * adaptiveWeight + caWeight * (1 - adaptiveWeight);
+                
+                const predicted = finalCvWeight * cvPred + (1 - finalCvWeight) * caPred;
+                const error = Math.abs(predicted - groundTruth.position[i]);
+                
+                predictions.push(predicted);
+                errors.push(error);
+            }
+            
+            return { predictions, errors };
+        }
+
+        // Update simulation
+        function updateSimulation() {
+            const groundTruth = generateGroundTruth();
+            const cvResult = predictConstantVelocity(groundTruth);
+            const caResult = predictConstantAcceleration(groundTruth);
+            const hybridResult = predictHybrid(groundTruth);
+
+            // Plot trajectories
+            const trajectoryData = [
+                {
+                    x: groundTruth.time,
+                    y: groundTruth.position,
+                    type: 'scatter',
+                    mode: 'lines+markers',
+                    name: 'Ground Truth',
+                    line: { color: '#2c3e50', width: 3 },
+                    marker: { size: 6 }
+                },
+                {
+                    x: groundTruth.time,
+                    y: cvResult.predictions,
+                    type: 'scatter',
+                    mode: 'lines',
+                    name: 'Constant Velocity',
+                    line: { color: '#e74c3c', width: 2, dash: 'dash' }
+                },
+                {
+                    x: groundTruth.time,
+                    y: caResult.predictions,
+                    type: 'scatter',
+                    mode: 'lines',
+                    name: 'Constant Acceleration',
+                    line: { color: '#3498db', width: 2, dash: 'dot' }
+                },
+                {
+                    x: groundTruth.time,
+                    y: hybridResult.predictions,
+                    type: 'scatter',
+                    mode: 'lines',
+                    name: 'Hybrid Model',
+                    line: { color: '#27ae60', width: 2 }
+                }
+            ];
+
+            const trajectoryLayout = {
+                title: {
+                    text: 'Trajectory Predictions Comparison',
+                    font: { size: 18, color: '#2c3e50' }
+                },
+                xaxis: { 
+                    title: 'Time (s)',
+                    gridcolor: '#ecf0f1'
+                },
+                yaxis: { 
+                    title: 'Position (m)',
+                    gridcolor: '#ecf0f1'
+                },
+                plot_bgcolor: '#ffffff',
+                paper_bgcolor: '#ffffff',
+                font: { family: 'Segoe UI, Tahoma, Geneva, Verdana, sans-serif' },
+                legend: {
+                    x: 0.02,
+                    y: 0.98,
+                    bgcolor: 'rgba(255,255,255,0.8)',
+                    bordercolor: '#bdc3c7',
+                    borderwidth: 1
+                }
+            };
+
+            Plotly.newPlot('trajectoryPlot', trajectoryData, trajectoryLayout, {responsive: true});
+
+            // Plot errors
+            const errorData = [
+                {
+                    x: groundTruth.time,
+                    y: cvResult.errors,
+                    type: 'scatter',
+                    mode: 'lines',
+                    name: 'CV Error',
+                    line: { color: '#e74c3c', width: 2 }
+                },
+                {
+                    x: groundTruth.time,
+                    y: caResult.errors,
+                    type: 'scatter',
+                    mode: 'lines',
+                    name: 'CA Error',
+                    line: { color: '#3498db', width: 2 }
+                },
+                {
+                    x: groundTruth.time,
+                    y: hybridResult.errors,
+                    type: 'scatter',
+                    mode: 'lines',
+                    name: 'Hybrid Error',
+                    line: { color: '#27ae60', width: 2 }
+                }
+            ];
+
+            const errorLayout = {
+                title: {
+                    text: 'Prediction Error Over Time',
+                    font: { size: 18, color: '#2c3e50' }
+                },
+                xaxis: { 
+                    title: 'Time (s)',
+                    gridcolor: '#ecf0f1'
+                },
+                yaxis: { 
+                    title: 'Absolute Error (m)',
+                    gridcolor: '#ecf0f1'
+                },
+                plot_bgcolor: '#ffffff',
+                paper_bgcolor: '#ffffff',
+                font: { family: 'Segoe UI, Tahoma, Geneva, Verdana, sans-serif' },
+                legend: {
+                    x: 0.02,
+                    y: 0.98,
+                    bgcolor: 'rgba(255,255,255,0.8)',
+                    bordercolor: '#bdc3c7',
+                    borderwidth: 1
+                }
+            };
+
+            Plotly.newPlot('errorPlot', errorData, errorLayout, {responsive: true});
+        }
+
+        // Reset simulation
+        function resetSimulation() {
+            simParams = {
+                velocity: 10,
+                acceleration: 0,
+                predTime: 5,
+                noise: 0.5
+            };
+            
+            // Reset sliders
+            document.getElementById('velocity').value = simParams.velocity;
+            document.getElementById('acceleration').value = simParams.acceleration;
+            document.getElementById('predTime').value = simParams.predTime;
+            document.getElementById('noise').value = simParams.noise;
+            
+            updateParamDisplays();
+            updateSimulation();
+        }
+
+        // Initialize
+        updateParamDisplays();
+        updateSimulation();
+    </script>
+</body>
+</html>
